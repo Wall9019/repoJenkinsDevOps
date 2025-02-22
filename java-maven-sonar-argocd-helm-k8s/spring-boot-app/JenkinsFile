@@ -24,7 +24,7 @@ pipeline {
         SONAR_URL = "http://54.167.27.211:9000"
       }
       steps {
-        withCredentials([string(credentialsId: 'tokenjenkins2', variable: 'SONAR_AUTH_TOKEN')]) {
+        withCredentials([string(credentialsId: 'tokensonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}'
         }
       }
@@ -51,7 +51,7 @@ pipeline {
             GIT_USER_NAME = "tanacloud"
         }
         steps {
-            withCredentials([string(credentialsId: 'tokenjenkinsdevops', variable: 'GITHUB_TOKEN')]) {
+            withCredentials([string(credentialsId: 'tokengit', variable: 'GITHUB_TOKEN')]) {
                 sh '''
                     git config user.email "tanacloudbrasil@gmail.com"
                     git config user.name "tanacloud"

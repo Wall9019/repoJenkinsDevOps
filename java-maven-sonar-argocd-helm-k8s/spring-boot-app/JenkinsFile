@@ -51,7 +51,7 @@ pipeline {
             GIT_USER_NAME = "tanacloud"
         }
         steps {
-            withCredentials([string(credentialsId: 'tokengit', variable: 'GITHUB_TOKEN')]) {
+            withCredentials([string(credentialsId: 'gitToken', variable: 'GITHUB_TOKEN')]) {
                 sh '''
                     git config user.email "tanacloudbrasil@gmail.com"
                     git config user.name "tanacloud"

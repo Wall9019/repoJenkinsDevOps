@@ -52,14 +52,14 @@ stage('Build and Push Docker Image') {
 }
 stage('Update Deployment File') {
         environment {
-            GIT_REPO_NAME = "repojenkinsdevops"
-            GIT_USER_NAME = "tanacloud"
+            GIT_REPO_NAME = "seu-repositorio-git"
+            GIT_USER_NAME = "seu-usuario-git"
         }
         steps {
             withCredentials([string(credentialsId: 'git', variable: 'GITHUB_TOKEN')]) {
                 sh '''
-                    git config user.email "tanacloudbrasil@gmail.com"
-                    git config user.name "tanacloud"
+                    git config user.email "seu-email-git@gmail.com"
+                    git config user.name "seu-usuario-git"
                     BUILD_NUMBER=${BUILD_NUMBER}
                     sed -i -e "s/ultimate-cicd.*/ultimate-cicd:${BUILD_NUMBER}/g"  java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
                     git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml

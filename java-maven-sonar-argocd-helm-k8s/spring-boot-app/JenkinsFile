@@ -39,7 +39,7 @@ stage('Build and Push Docker Image') {
 
             // Recupera o token do Jenkins Credentials
             withCredentials([string(credentialsId: 'docker-cred', variable: 'DOCKER_TOKEN')]) {
-                sh 'echo $DOCKER_TOKEN | docker login -u seu-usuario-docker --password-stdin'
+                sh 'echo $DOCKER_TOKEN | docker login -u camilacarolina --password-stdin'
 
                 def dockerImage = docker.image("${DOCKER_IMAGE}")
                 dockerImage.push()
@@ -50,16 +50,16 @@ stage('Build and Push Docker Image') {
         }
     }
 }
-stage('Update Deployment File') {
+    stage('Update Deployment File') {
         environment {
-            GIT_REPO_NAME = "seu-repositorio-git"
-            GIT_USER_NAME = "seu-usuario-git"
+            GIT_REPO_NAME = "repojenkinsdevops"
+            GIT_USER_NAME = "tanacloud"
         }
         steps {
             withCredentials([string(credentialsId: 'git', variable: 'GITHUB_TOKEN')]) {
                 sh '''
-                    git config user.email "seu-email-git@gmail.com"
-                    git config user.name "seu-usuario-git"
+                    git config user.email "tanacloudbrasil@gmail.com"
+                    git config user.name "tanacloud"
                     BUILD_NUMBER=${BUILD_NUMBER}
                     sed -i -e "s/ultimate-cicd.*/ultimate-cicd:${BUILD_NUMBER}/g"  java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
                     git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
@@ -71,3 +71,4 @@ stage('Update Deployment File') {
     }
   }
 }
+

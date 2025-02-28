@@ -2,7 +2,7 @@ pipeline {
     agent {
         docker {
             image 'abhishekf5/maven-abhishek-docker-agent:v1'
-            args '--user=root --storage-opt overlay2.override_kernel_check=1'  // Removi mounts desnecessários
+            args '--user=root -v /var/run/docker.sock:/var/run/docker.sock'
             registryUrl 'https://index.docker.io/v1/'
         }
     }
@@ -13,18 +13,6 @@ pipeline {
     }
 
     stages {
-        // Etapa nova para limpeza preventiva
-        stage('Pre-Cleanup') {
-            steps {
-                script {
-                    sh '''
-                        docker system prune -f || true
-                        docker volume prune -f || true
-                    '''
-                }
-            }
-        }
-
         stage('Checkout') {
             steps {
                 checkout([$class: 'GitSCM', 
@@ -73,7 +61,7 @@ pipeline {
                         sh """
                             set -e
                             cd ${appDir}
-                            docker buildx build --load -t ${DOCKER_IMAGE} .  // Usa BuildKit para eficiência
+                            docker build -t ${DOCKER_IMAGE} .
                             echo ${DOCKER_PWD} | docker login -u ${DOCKER_USER} --password-stdin
                             docker push ${DOCKER_IMAGE}
                         """
@@ -83,16 +71,11 @@ pipeline {
         }
         
         stage('Security Scan with Trivy') {
-            agent {
-                docker {
-                    image 'ghcr.io/aquasecurity/trivy:latest'
-                    args '--user=root --entrypoint=""'  // Configuração específica para Trivy
-                }
-            }
             steps {
                 script {
                     sh """
-                        trivy image --exit-code 1 --severity CRITICAL ${DOCKER_IMAGE}  // Só falha para vulnerabilidades CRÍTICAS
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                            ghcr.io/aquasecurity/trivy:latest image --exit-code 1 --severity CRITICAL ${DOCKER_IMAGE}
                     """
                 }
             }
@@ -107,7 +90,7 @@ pipeline {
                 expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
             }
             steps {
-                withCredentials([string(credentialsId: 'gitToken', variable: 'GITHUB_TOKEN')]) {  // Corrigi para gitToken
+                withCredentials([string(credentialsId: 'gitToken', variable: 'GITHUB_TOKEN')]) {
                     script {
                         def deploymentFile = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml'
                         sh """
@@ -125,31 +108,15 @@ pipeline {
                 }
             }
         }
-
-        // Etapa nova para monitoramento de espaço
-        stage('Disk Space Check') {
-            steps {
-                sh '''
-                    df -h /var/lib/docker | awk \'{print $5 " " $6}\' | grep -v Use | while read output;
-                    do
-                        uso=$(echo $output | awk \'{print $1}\' | cut -d\'%\' -f1)
-                        if [ $uso -ge 85 ]; then
-                            echo "Erro: Espaço em disco crítico ($uso%)"
-                            exit 1
-                        fi
-                    done
-                '''
-            }
-        }
     }
 
     post {
         always {
-            node {  // Contexto obrigatório para execução
+            node(label: 'master') {  // Label correto aqui
                 script {
                     sh """
-                        docker logout || true
-                        docker system prune -a --volumes --force || true  // Limpeza agressiva
+                        docker logout || true  
+                        docker system prune -f || true
                     """
                 }
             }

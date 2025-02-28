@@ -74,10 +74,11 @@ pipeline {
         stage('Security Scan with Trivy') {
             steps {
                 script {
+                    // Utilizando o container oficial do Trivy a partir do GitHub Container Registry
                     sh """
                         set -e
-                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasecurity/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_IMAGE}
-                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasecurity/trivy:latest image --exit-code 1 --severity CRITICAL ${DOCKER_IMAGE}
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/aquasecurity/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_IMAGE}
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/aquasecurity/trivy:latest image --exit-code 1 --severity CRITICAL ${DOCKER_IMAGE}
                     """
                 }
             }

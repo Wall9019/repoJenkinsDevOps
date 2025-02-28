@@ -114,7 +114,7 @@ pipeline {
 
     post {
         always {
-            node { // Garante o contexto de workspace para os comandos do post
+            node('master') { // Garante o contexto de workspace para os comandos do post
                 script {
                     sh """
                         set -e

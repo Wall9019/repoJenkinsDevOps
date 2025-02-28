@@ -96,7 +96,7 @@ pipeline {
 
     post {
         always {
-            node {  // Adicionado bloco node para contexto
+            node('label') {  // Adicionado parâmetro 'label' aqui
                 script {
                     sh 'docker logout || true'  // Limpeza segura
                     sh 'docker system prune -f || true'

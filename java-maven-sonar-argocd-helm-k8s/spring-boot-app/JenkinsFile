@@ -2,32 +2,22 @@ pipeline {
     agent {
         docker {
             image 'abhishekf5/maven-abhishek-docker-agent:v1'
-            args '--user=root -v /var/run/docker.sock:/var/run/docker.sock'
+            args '--user=root -v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp'
             registryUrl 'https://index.docker.io/v1/'
         }
     }
     
     environment {
-        DOCKER_IMAGE = "wall90/funcionap:${BUILD_NUMBER}"
+        DOCKER_IMAGE = "wall90/funcionap:${BUILD_NUMBER ?: 'latest'}"
         SONAR_URL = "http://54.80.240.203:9000"
     }
 
     stages {
-        stage('Pre-Cleanup') {
-            steps {
-                script {
-                    sh(script: 'docker system prune -af || true', label: 'Clean Docker System')
-                }
-            }
-        }
-
         stage('Checkout') {
             steps {
-                checkout([
-                    $class: 'GitSCM', 
-                    branches: [[name: 'main']], 
-                    userRemoteConfigs: [[url: 'https://github.com/Wall9019/repoJenkinsDevOps']]
-                ])
+                checkout([$class: 'GitSCM', 
+                          branches: [[name: 'main']], 
+                          userRemoteConfigs: [[url: 'https://github.com/Wall9019/repoJenkinsDevOps']]])
             }
         }
 
@@ -65,15 +55,14 @@ pipeline {
             steps {
                 script {
                     def appDir = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app'
-                    withCredentials([usernamePassword(
-                        credentialsId: 'dockerToken', 
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PWD'
-                    )]) {
+                    withCredentials([usernamePassword(credentialsId: 'dockerToken', 
+                                                      usernameVariable: 'DOCKER_USER', 
+                                                      passwordVariable: 'DOCKER_PWD')]) {
                         sh """
                             set -e
                             cd ${appDir}
-                            docker build --no-cache -t ${DOCKER_IMAGE} .
+                            docker info
+                            docker build -t ${DOCKER_IMAGE} .
                             echo ${DOCKER_PWD} | docker login -u ${DOCKER_USER} --password-stdin
                             docker push ${DOCKER_IMAGE}
                         """
@@ -83,37 +72,38 @@ pipeline {
         }
         
         stage('Security Scan with Trivy') {
-            agent any
             steps {
                 script {
                     sh """
-                        docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            aquasec/trivy:0.45.0 \
-                            image --exit-code 1 --severity CRITICAL ${DOCKER_IMAGE}
+                        set -e
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/aquasecurity/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_IMAGE}
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/aquasecurity/trivy:latest image --exit-code 1 --severity CRITICAL ${DOCKER_IMAGE}
                     """
                 }
             }
         }
 
         stage('Update Deployment File') {
-            when { 
-                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
-            }
             environment {
                 GIT_REPO_NAME = "repoJenkinsDevOps"
                 GIT_USER_NAME = "Wall9019"
             }
+            when {
+                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+            }
             steps {
-                withCredentials([string(credentialsId: 'gitToken', variable: 'GITHUB_TOKEN')]) {
+                withCredentials([string(credentialsId: 'git', variable: 'GITHUB_TOKEN')]) {
                     script {
                         def deploymentFile = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml'
                         sh """
+                            set -e
                             git config --global user.email "211037695@aluno.unb.br"
                             git config --global user.name "Jenkins"
+                            
                             sed -i "s|ultimate-cicd:[0-9]*|funcionap:${BUILD_NUMBER}|g" ${deploymentFile}
+                            
                             git add ${deploymentFile}
-                            git commit -m "Update image to build ${BUILD_NUMBER}"
+                            git commit -m "Automated: Update image to build ${BUILD_NUMBER}"
                             git push "https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git" HEAD:main
                         """
                     }
@@ -124,12 +114,13 @@ pipeline {
 
     post {
         always {
-            node('built-in') {
+            node { // Garante o contexto de workspace para os comandos do post
                 script {
-                    sh '''
-                        docker logout || true
-                        docker system prune -af
-                    '''
+                    sh """
+                        set -e
+                        docker logout || true  
+                        docker system prune -f || true
+                    """
                 }
             }
         }

@@ -1,8 +1,8 @@
 pipeline {
     agent {
         docker {
-            image 'maven:3.8.6-jdk-11' // Imagem com Maven e JDK integrados
-            args '-v /var/run/docker.sock:/var/run/docker.sock' // Monta o socket do Docker
+            image 'maven:3.8.6-jdk-11' // Imagem com Maven e JDK
+            args '-u root -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
     
@@ -10,20 +10,29 @@ pipeline {
         DOCKER_IMAGE = "wall90/funcionap:${BUILD_NUMBER ?: 'latest'}"
         SONAR_URL = "http://52.200.185.43:9000"
     }
-
+    
     stages {
+        stage('Initialize') {
+            steps {
+                sh '''
+                    apt-get update && apt-get install -y docker.io
+                    docker --version
+                '''
+            }
+        }
+        
         stage('Checkout') {
             steps {
                 checkout([$class: 'GitSCM', 
                           branches: [[name: 'main']], 
                           userRemoteConfigs: [[
                             url: 'https://github.com/Wall9019/repoJenkinsDevOps',
-                            credentialsId: 'GITHUB_TOKEN' // Certifique-se de que esta credencial está configurada no Jenkins
+                            credentialsId: 'GITHUB_TOKEN'
                           ]]]
                 )
             }
         }
-
+        
         stage('Build and Test') {
             steps {
                 script {
@@ -35,7 +44,7 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Static Code Analysis') {
             steps {
                 withCredentials([string(credentialsId: 'sonar', variable: 'SONAR_AUTH_TOKEN')]) {
@@ -51,7 +60,7 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Build and Push Docker Image') {
             steps {
                 script {
@@ -78,18 +87,18 @@ pipeline {
                     sh """
                         docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
                             -v \$HOME/.cache/trivy:/root/.cache/trivy \
-                            aquasec/trivy:latest \
+                            ghcr.io/aquasecurity/trivy:latest \
                             image --ignore-unfixed --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_IMAGE}
                         
                         docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
                             -v \$HOME/.cache/trivy:/root/.cache/trivy \
-                            aquasec/trivy:latest \
+                            ghcr.io/aquasecurity/trivy:latest \
                             image --ignore-unfixed --exit-code 1 --severity CRITICAL ${DOCKER_IMAGE}
                     """
                 }
             }
         }
-
+        
         stage('Update Deployment File') {
             environment {
                 GIT_REPO_NAME = "repoJenkinsDevOps"
@@ -115,11 +124,11 @@ pipeline {
             }
         }
     }
-
+    
     post {
         always {
             script {
-                sh 'docker logout || true'  // Não falha o pipeline
+                sh 'docker logout || true'
             }
         }
     }

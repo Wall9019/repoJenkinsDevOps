@@ -80,7 +80,7 @@ pipeline {
                 expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
             }
             steps {
-                withCredentials([string(credentialsId: 'gitToken', variable: 'GITHUB_TOKEN')]) {
+                withCredentials([string(credentialsId: 'git', variable: 'GITHUB_TOKEN')]) {
                     script {
                         def deploymentFile = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml'
                         sh """

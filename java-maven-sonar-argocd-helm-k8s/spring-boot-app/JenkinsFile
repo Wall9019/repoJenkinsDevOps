@@ -1,97 +1,65 @@
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.8.6-jdk-11'  // Imagem com Maven e JDK
-            args '-u root -v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
-    
+    agent any
     environment {
-        // Define a tag da imagem com base no BUILD_NUMBER (ou "latest" se não houver)
-        DOCKER_IMAGE = "wall90/funcionap:${BUILD_NUMBER ?: 'latest'}"
+        DOCKER_CREDENTIALS_ID = 'docker'
+        SONARQUBE_CREDENTIALS_ID = 'sonar'
+        GIT_CREDENTIALS_ID = 'git'
+        DOCKER_IMAGE = 'wall90/funcionap'
+        DOCKER_TAG = 'latest'
+        SONARQUBE_SERVER = 'http://<IP_DO_SONARQUBE>:9000'
     }
-    
     stages {
         stage('Checkout') {
             steps {
-                checkout([
-                    $class: 'GitSCM', 
-                    branches: [[name: 'main']], 
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/Wall9019/repoJenkinsDevOps',
-                        credentialsId: 'GITHUB_TOKEN'
-                    ]]
-                ])
+                script {
+                    // Clona o repositório usando as credenciais do Git
+                    git credentialsId: GIT_CREDENTIALS_ID, url: 'https://github.com/Wall9019/repoJenkinsDevOps.git'
+                }
             }
         }
-        
-        stage('Initialize Environment') {
+        stage('Build Maven Project') {
             steps {
-                // Instala o cliente Docker no container, se necessário
-                sh '''
-                    apt-get update && apt-get install -y docker.io
-                    docker --version
-                '''
-            }
-        }
-        
-        stage('Build and Test') {
-            steps {
-                // Executa o Maven no diretório onde está o POM.xml para evitar o erro de projeto ausente
-                dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
+                script {
+                    // Executa o build do Maven
                     sh 'mvn clean package -DskipTests'
                 }
             }
         }
-        
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "Construindo a imagem Docker..."
-                    // Assume que o Dockerfile está localizado no mesmo diretório do POM.xml
-                    dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
-                        sh "docker build -t ${DOCKER_IMAGE} ."
-                    }
+                    // Constrói a imagem Docker
+                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
                 }
             }
         }
-        
         stage('Security Scan with Trivy') {
             steps {
                 script {
-                    echo "Executando o scan com Trivy..."
-                    // Executa o Trivy via Docker para escanear a imagem construída; captura o código de saída para tratamento sem abortar o pipeline
-                    def trivyStatus = sh(script: """
-                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
-                            -v \$HOME/.cache/trivy:/root/.cache/trivy \\
-                            ghcr.io/aquasecurity/trivy:latest image \\
-                            --ignore-unfixed --exit-code 1 --severity CRITICAL ${DOCKER_IMAGE}
-                    """, returnStatus: true)
-                    
-                    echo "Código de saída do Trivy: ${trivyStatus}"
-                    if (trivyStatus != 0) {
-                        echo "Vulnerabilidades críticas detectadas. Confira o relatório para maiores detalhes."
-                    } else {
-                        echo "Scan sem vulnerabilidades críticas."
-                    }
+                    // Executa o scan de segurança com Trivy
+                    sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /root/.cache/trivy:/root/.cache/trivy aquasec/trivy:latest image --ignore-unfixed --exit-code 0 --severity CRITICAL ${DOCKER_IMAGE}:${DOCKER_TAG}"
                 }
             }
         }
-        
         stage('Push Docker Image') {
             steps {
                 script {
-                    echo "Enviando a imagem para o repositório Docker..."
-                    sh "docker push ${DOCKER_IMAGE}"
+                    // Faz login no Docker Hub
+                    withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+                        sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+                    }
+                    // Faz o push da imagem
+                    sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    // Faz logout do Docker Hub
+                    sh 'docker logout'
                 }
             }
         }
     }
-    
     post {
         always {
-            // Efetua logout do Docker para limpar as credenciais
-            sh 'docker logout || true'
+            // Limpa as imagens Docker locais para economizar espaço
+            sh "docker rmi ${DOCKER_IMAGE}:${DOCKER_TAG} || true"
         }
     }
 }

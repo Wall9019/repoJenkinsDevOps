@@ -7,6 +7,11 @@ pipeline {
         }
     }
     
+    environment {
+        DOCKER_IMAGE = "camilacarolina/ultimate-cicd:${BUILD_NUMBER ?: 'latest'}"
+        SONAR_URL = "http://54.80.240.203:9000"
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -21,6 +26,7 @@ pipeline {
                 script {
                     def appDir = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app'
                     sh """
+                        set -e
                         cd ${appDir} 
                         mvn clean package -DskipTests
                     """
@@ -29,14 +35,12 @@ pipeline {
         }
 
         stage('Static Code Analysis') {
-            environment {
-                SONAR_URL = "http://54.80.240.203:9000"
-            }
             steps {
                 withCredentials([string(credentialsId: 'sonar', variable: 'SONAR_AUTH_TOKEN')]) {
                     script {
                         def appDir = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app'
                         sh """
+                            set -e
                             cd ${appDir}
                             mvn sonar:sonar \
                                 -Dsonar.login=${SONAR_AUTH_TOKEN} \
@@ -48,9 +52,6 @@ pipeline {
         }
 
         stage('Build and Push Docker Image') {
-            environment {
-                DOCKER_IMAGE = "camilacarolina/ultimate-cicd:${BUILD_NUMBER}"
-            }
             steps {
                 script {
                     def appDir = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app'
@@ -58,7 +59,9 @@ pipeline {
                                                    usernameVariable: 'DOCKER_USER', 
                                                    passwordVariable: 'DOCKER_PWD')]) {
                         sh """
+                            set -e
                             cd ${appDir}
+                            docker info
                             docker build -t ${DOCKER_IMAGE} .
                             echo ${DOCKER_PWD} | docker login -u ${DOCKER_USER} --password-stdin
                             docker push ${DOCKER_IMAGE}
@@ -73,11 +76,15 @@ pipeline {
                 GIT_REPO_NAME = "repoJenkinsDevOps"
                 GIT_USER_NAME = "Wall9019"
             }
+            when {
+                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+            }
             steps {
                 withCredentials([string(credentialsId: 'gitToken', variable: 'GITHUB_TOKEN')]) {
                     script {
                         def deploymentFile = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml'
                         sh """
+                            set -e
                             git config --global user.email "211037695@aluno.unb.br"
                             git config --global user.name "Jenkins"
                             
@@ -96,8 +103,11 @@ pipeline {
     post {
         always {
             script {
-                sh 'docker logout || true'  // Limpeza segura
-                sh 'docker system prune -f || true'
+                sh """
+                    set -e
+                    docker logout || true  
+                    docker system prune -f || true
+                """
             }
         }
     }

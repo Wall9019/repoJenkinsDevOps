@@ -96,7 +96,7 @@ pipeline {
 
     post {
         always {
-            node('label') {  // Adicionado parâmetro 'label' aqui
+            node('master') {  // Substituído o parâmetro 'label' por 'master'
                 script {
                     sh 'docker logout || true'  // Limpeza segura
                     sh 'docker system prune -f || true'

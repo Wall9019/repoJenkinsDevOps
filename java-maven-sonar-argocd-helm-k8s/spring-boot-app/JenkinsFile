@@ -2,21 +2,18 @@ pipeline {
     agent {
         docker {
             image 'abhishekf5/maven-abhishek-docker-agent:v1'
-            args '-v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp'  // Adicionei volume temporário
-            registryUrl 'https://index.docker.io/v1/'  // Especifique o registry
-            registryCredentialsId 'dockerToken' 
+            args '-v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp'
+            registryUrl 'https://index.docker.io/v1/'
+            // Removi registryCredentialsId pois o agente Docker não requer se a imagem for pública
         }
     }
     
     stages {
         stage('Checkout') {
             steps {
-                script {
-                    // Adicionei checkout explícito para garantir o código fonte
-                    checkout([$class: 'GitSCM', branches: [[name: 'main']], 
-                            extensions: [], 
-                            userRemoteConfigs: [[url: 'https://github.com/Wall9019/repoJenkinsDevOps']]])
-                }
+                checkout([$class: 'GitSCM', 
+                        branches: [[name: 'main']], 
+                        userRemoteConfigs: [[url: 'https://github.com/Wall9019/repoJenkinsDevOps']]])
             }
         }
 
@@ -25,7 +22,6 @@ pipeline {
                 script {
                     def appDir = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app'
                     sh """
-                        ls -ltr
                         cd ${appDir} 
                         mvn clean package -DskipTests
                     """
@@ -67,7 +63,6 @@ pipeline {
                             docker build -t ${DOCKER_IMAGE} .
                             echo ${DOCKER_PWD} | docker login -u ${DOCKER_USER} --password-stdin
                             docker push ${DOCKER_IMAGE}
-                            docker logout
                         """
                     }
                 }
@@ -80,14 +75,13 @@ pipeline {
                 GIT_USER_NAME = "Wall9019"
             }
             steps {
-                withCredentials([string(credentialsId: 'git', variable: 'GITHUB_TOKEN')]) {
+                withCredentials([string(credentialsId: 'gitToken', variable: 'GITHUB_TOKEN')]) {
                     script {
                         def deploymentFile = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml'
                         sh """
                             git config --global user.email "211037695@aluno.unb.br"
                             git config --global user.name "Jenkins"
                             
-                            # Usando delimiter para evitar problemas com aspas
                             sed -i "s|ultimate-cicd:[0-9]*|ultimate-cicd:${BUILD_NUMBER}|g" ${deploymentFile}
                             
                             git add ${deploymentFile}
@@ -102,9 +96,11 @@ pipeline {
 
     post {
         always {
-            script {
-                // Cleanup Docker
-                sh 'docker system prune -f || true'
+            node {  // Adicionado bloco node para contexto
+                script {
+                    sh 'docker logout || true'  // Limpeza segura
+                    sh 'docker system prune -f || true'
+                }
             }
         }
     }

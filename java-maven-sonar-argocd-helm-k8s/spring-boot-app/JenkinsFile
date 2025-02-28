@@ -9,7 +9,7 @@ pipeline {
     
     environment {
         DOCKER_IMAGE = "wall90/funcionap:${BUILD_NUMBER ?: 'latest'}"
-        SONAR_URL = "http://54.80.240.203:9000"
+        SONAR_URL = "http://52.200.185.43:9000/"
     }
 
     stages {
@@ -55,13 +55,14 @@ pipeline {
             steps {
                 script {
                     def appDir = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app'
-                    withCredentials([usernamePassword(credentialsId: 'dockerToken', 
-                                                      usernameVariable: 'DOCKER_USER', 
-                                                      passwordVariable: 'DOCKER_PWD')]) {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker',  // Alterado para usar a credencial correta
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PWD'
+                    )]) {
                         sh """
                             set -e
                             cd ${appDir}
-                            docker info
                             docker build -t ${DOCKER_IMAGE} .
                             echo ${DOCKER_PWD} | docker login -u ${DOCKER_USER} --password-stdin
                             docker push ${DOCKER_IMAGE}
@@ -98,7 +99,7 @@ pipeline {
                         sh """
                             set -e
                             git config --global user.email "211037695@aluno.unb.br"
-                            git config --global user.name "Jenkins"
+                            git config --global user.name "Wall9019"
                             
                             sed -i "s|ultimate-cicd:[0-9]*|funcionap:${BUILD_NUMBER}|g" ${deploymentFile}
                             
@@ -114,7 +115,7 @@ pipeline {
 
     post {
         always {
-            node('master') { // Garante o contexto de workspace para os comandos do post
+            node('master') {
                 script {
                     sh """
                         set -e

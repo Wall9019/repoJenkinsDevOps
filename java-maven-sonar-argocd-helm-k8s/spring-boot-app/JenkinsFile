@@ -12,8 +12,8 @@ pipeline {
         stage('Checkout') {
             steps {
                 script {
-                    // Clona o repositório usando as credenciais do Git
-                    git credentialsId: GIT_CREDENTIALS_ID, url: 'https://github.com/Wall9019/repoJenkinsDevOps.git'
+                    // Clona o repositório usando as credenciais do Git e o branch main
+                    git branch: 'main', credentialsId: GIT_CREDENTIALS_ID, url: 'https://github.com/Wall9019/repoJenkinsDevOps.git'
                 }
             }
         }

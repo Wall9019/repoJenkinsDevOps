@@ -1,16 +1,14 @@
 pipeline {
     agent {
         docker {
-            // Utiliza uma imagem que já possui Maven e JDK, além do Docker instalado na máquina host
-            image 'maven:3.8.6-jdk-11'
-            // Monta o socket do Docker e executa como root para permitir a instalação de pacotes, se necessário
+            image 'maven:3.8.6-jdk-11'  // Imagem com Maven, JDK e compatibilidade com Docker
             args '-u root -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
     
     environment {
-        // Define a imagem Docker a ser construída, usando o BUILD_NUMBER ou "latest" se não existir
         DOCKER_IMAGE = "wall90/funcionap:${BUILD_NUMBER ?: 'latest'}"
+        SONAR_URL    = "http://52.200.185.43:9000"
     }
     
     stages {
@@ -29,15 +27,18 @@ pipeline {
         
         stage('Build and Test') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                // Altere para o diretório onde está o POM.xml
+                dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
+                    sh 'mvn clean package -DskipTests'
+                }
             }
         }
         
         stage('Security Scan with Trivy') {
             steps {
                 script {
-                    echo "Iniciando o scan com Trivy..."
-                    // Executa o Trivy e captura o código de saída sem abortar o pipeline
+                    echo "Executando o scan com Trivy..."
+                    // Executa o Trivy via Docker; captura o código de saída sem interromper o pipeline
                     def trivyStatus = sh(script: """
                         docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
                             -v \$HOME/.cache/trivy:/root/.cache/trivy \\
@@ -47,11 +48,10 @@ pipeline {
                     
                     echo "Código de saída do Trivy: ${trivyStatus}"
                     if (trivyStatus != 0) {
-                        echo "Vulnerabilidades críticas encontradas. Verifique o relatório gerado."
-                        // Aqui você pode optar por registrar o status, enviar notificações, etc.
-                        // O pipeline continuará a construir a imagem mesmo havendo vulnerabilidades.
+                        echo "Vulnerabilidades críticas detectadas. Confira o relatório para maiores detalhes."
+                        // Aqui você pode registrar o status, notificar a equipe ou mesmo marcar o build como UNSTABLE, se desejado
                     } else {
-                        echo "Nenhuma vulnerabilidade crítica encontrada."
+                        echo "Scan sem vulnerabilidades críticas."
                     }
                 }
             }
@@ -62,7 +62,7 @@ pipeline {
                 script {
                     echo "Construindo a imagem Docker..."
                     sh "docker build -t ${DOCKER_IMAGE} ."
-                    echo "Enviando a imagem para o repositório Docker..."
+                    echo "Enviando a imagem para o repositório..."
                     sh "docker push ${DOCKER_IMAGE}"
                 }
             }
@@ -71,7 +71,7 @@ pipeline {
     
     post {
         always {
-            // Efetua logout do Docker para limpar as credenciais, se necessário
+            // Efetua logout do Docker para limpar credenciais
             sh 'docker logout || true'
         }
     }

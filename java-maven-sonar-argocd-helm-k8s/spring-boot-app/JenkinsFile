@@ -1,8 +1,8 @@
 pipeline {
     agent {
         docker {
-            image 'docker:dind'  // Imagem com Docker instalado
-            args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
+            image 'maven:3.8.6-jdk-11' // Imagem com Maven e JDK integrados
+            args '-v /var/run/docker.sock:/var/run/docker.sock' // Monta o socket do Docker
         }
     }
     
@@ -18,7 +18,7 @@ pipeline {
                           branches: [[name: 'main']], 
                           userRemoteConfigs: [[
                             url: 'https://github.com/Wall9019/repoJenkinsDevOps',
-                            credentialsId: 'git'  // Credencial do GitHub
+                            credentialsId: 'GITHUB_TOKEN' // Certifique-se de que esta credencial está configurada no Jenkins
                           ]]]
                 )
             }
@@ -78,12 +78,12 @@ pipeline {
                     sh """
                         docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
                             -v \$HOME/.cache/trivy:/root/.cache/trivy \
-                            ghcr.io/aquasecurity/trivy:latest \
+                            aquasec/trivy:latest \
                             image --ignore-unfixed --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_IMAGE}
                         
                         docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
                             -v \$HOME/.cache/trivy:/root/.cache/trivy \
-                            ghcr.io/aquasecurity/trivy:latest \
+                            aquasec/trivy:latest \
                             image --ignore-unfixed --exit-code 1 --severity CRITICAL ${DOCKER_IMAGE}
                     """
                 }
@@ -99,7 +99,7 @@ pipeline {
                 expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
             }
             steps {
-                withCredentials([string(credentialsId: 'git', variable: 'GITHUB_TOKEN')]) {
+                withCredentials([string(credentialsId: 'GITHUB_TOKEN', variable: 'GITHUB_TOKEN')]) {
                     script {
                         def deploymentFile = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml'
                         sh """
@@ -118,10 +118,8 @@ pipeline {
 
     post {
         always {
-            node('built-in') {
-                script {
-                    sh 'docker logout || true'  // Não falha o pipeline
-                }
+            script {
+                sh 'docker logout || true'  // Não falha o pipeline
             }
         }
     }

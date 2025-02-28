@@ -9,7 +9,7 @@ pipeline {
     
     environment {
         DOCKER_IMAGE = "wall90/funcionap:${BUILD_NUMBER ?: 'latest'}"
-        SONAR_URL = "http://52.200.185.43:9000/"
+        SONAR_URL = "http://52.200.185.43:9000"  // IP atualizado
     }
 
     stages {
@@ -17,7 +17,11 @@ pipeline {
             steps {
                 checkout([$class: 'GitSCM', 
                           branches: [[name: 'main']], 
-                          userRemoteConfigs: [[url: 'https://github.com/Wall9019/repoJenkinsDevOps']]])
+                          userRemoteConfigs: [[
+                            url: 'https://github.com/Wall9019/repoJenkinsDevOps',
+                            credentialsId: 'git'  // Credencial adicionada
+                          ]]]
+                )
             }
         }
 
@@ -56,7 +60,7 @@ pipeline {
                 script {
                     def appDir = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app'
                     withCredentials([usernamePassword(
-                        credentialsId: 'docker',  // Alterado para usar a credencial correta
+                        credentialsId: 'docker',
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PWD'
                     )]) {
@@ -99,7 +103,7 @@ pipeline {
                         sh """
                             set -e
                             git config --global user.email "211037695@aluno.unb.br"
-                            git config --global user.name "Wall9019"
+                            git config --global user.name "Jenkins"
                             
                             sed -i "s|ultimate-cicd:[0-9]*|funcionap:${BUILD_NUMBER}|g" ${deploymentFile}
                             
@@ -115,7 +119,7 @@ pipeline {
 
     post {
         always {
-            node('master') {
+            node('built-in') {  // Label atualizado para 'built-in'
                 script {
                     sh """
                         set -e

@@ -4,7 +4,6 @@ pipeline {
             image 'abhishekf5/maven-abhishek-docker-agent:v1'
             args '-v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp'
             registryUrl 'https://index.docker.io/v1/'
-            // Removi registryCredentialsId pois o agente Docker não requer se a imagem for pública
         }
     }
     
@@ -96,11 +95,9 @@ pipeline {
 
     post {
         always {
-            node('master') {  // Substituído o parâmetro 'label' por 'master'
-                script {
-                    sh 'docker logout || true'  // Limpeza segura
-                    sh 'docker system prune -f || true'
-                }
+            script {
+                sh 'docker logout || true'  // Limpeza segura
+                sh 'docker system prune -f || true'
             }
         }
     }

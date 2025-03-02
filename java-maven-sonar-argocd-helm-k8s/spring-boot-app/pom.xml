@@ -1,75 +1,127 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"  
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+                             http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.abhishek</groupId>
-    <artifactId>spring-boot-demo</artifactId>
-    <version>1.0</version>
-
-    <name>spring-boot-demo</name>
-    <url></url>
-
+    <!-- Parent do Spring Boot para gerenciamento de dependências e plugins -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.2.4.RELEASE</version>
+        <version>3.1.4</version>  <!-- Versão do Spring Boot -->
+        <relativePath/>  <!-- Busca o parent no repositório central -->
     </parent>
 
+    <!-- Identificação do projeto -->
+    <groupId>com.example</groupId>
+    <artifactId>spring-boot-app</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <name>spring-boot-app</name>
+
+    <!-- Propriedades do Java -->
     <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
-        <java.version>11</java.version>
+        <java.version>17</java.version>
+        <maven.compiler.plugin.version>3.8.1</maven.compiler.plugin.version>
     </properties>
 
+    <!-- Dependências do projeto -->
     <dependencies>
-
+        <!-- Spring Boot Web Starter -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-thymeleaf</artifactId>
-        </dependency>
+
+        <!-- Spring Boot Test Starter (inclui JUnit 5 por padrão) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
 
-        <!-- debugging -->
+        <!-- JUnit 5 (JUnit Jupiter API e Engine) -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.9.3</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Lombok (para geração de código boilerplate) -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.24</version>
+            <scope>provided</scope> <!-- Usado apenas em tempo de compilação -->
+        </dependency>
+
+        <!-- Spring Boot DevTools (ferramentas de desenvolvimento) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
-            <optional>true</optional>
+            <scope>runtime</scope>   <!-- Disponível somente em tempo de execução -->
+            <optional>true</optional><!-- Não incluir em dependências transitivas -->
         </dependency>
-
     </dependencies>
 
+    <!-- Plugins de build -->
     <build>
-
-        <finalName>spring-boot-web</finalName>
-
         <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
+            <!-- Plugin do compilador Maven (Java 17) -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.8.0</version>
+                <version>${maven.compiler.plugin.version}</version>
                 <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
+                    <source>17</source>
+                    <target>17</target>
                 </configuration>
             </plugin>
 
+            <!-- Plugin do Spring Boot (empacotamento do aplicativo) -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <!-- versão gerenciada pelo parent do Spring Boot -->
+            </plugin>
+
+            <!-- Plugin do SonarQube Scanner (análise estática) -->
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>4.0.0.4121</version>
+            </plugin>
+
+            <!-- Plugin Jacoco (para cobertura de testes) -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.11</version>
+                <executions>
+                    <!-- Prepara o agente Jacoco antes dos testes -->
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <!-- Gera o relatório de cobertura após os testes -->
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Habilita geração de relatório em XML para o SonarQube -->
+                            <reports>
+                                <xml enabled="true"/>
+                                <html enabled="true"/>
+                            </reports>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
-
-
 </project>

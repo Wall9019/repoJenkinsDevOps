@@ -45,10 +45,11 @@ pipeline {
                 script {
                     echo 'Starting SonarQube analysis...'
                     try {
-                        // Usa as configurações do SonarQube definidas no Jenkins (configurar o SonarQube Server na seção de configuração do Jenkins)
-                        withSonarQubeEnv('SonarQube') {
-                            // Executa a análise com o Maven; o projectKey deve ser ajustado conforme o seu projeto
-                            sh "mvn sonar:sonar -Dsonar.projectKey=funcionap"
+                        // Executa a análise no diretório correto onde está o pom.xml
+                        dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
+                            withSonarQubeEnv('SonarQube') {
+                                sh "mvn sonar:sonar -Dsonar.projectKey=funcionap"
+                            }
                         }
                         echo 'SonarQube analysis completed successfully.'
                     } catch (err) {

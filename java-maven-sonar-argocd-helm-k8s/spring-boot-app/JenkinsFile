@@ -4,9 +4,9 @@ pipeline {
         DOCKER_CREDENTIALS_ID    = 'docker'          // Credencial do Docker Hub (username/password)
         SONARQUBE_CREDENTIALS_ID = 'sonar'           // Credencial do SonarQube (token ou user/pass)
         GIT_CREDENTIALS_ID       = 'git'             // Credencial para acesso ao Git
-        DOCKER_IMAGE = 'wall90/funcionap'            // Nome da imagem Docker
-        DOCKER_TAG   = 'latest'                      // Tag da imagem
-        SONARQUBE_SERVER = 'http://<IP_DO_SONARQUBE>:9000'  // URL do SonarQube
+        DOCKER_IMAGE             = 'wall90/funcionap'// Nome da imagem Docker
+        DOCKER_TAG               = 'latest'          // Tag da imagem
+        SONARQUBE_SERVER         = 'http://<IP_DO_SONARQUBE>:9000'  // URL do SonarQube
     }
     stages {
         stage('Checkout') {
@@ -27,7 +27,7 @@ pipeline {
             steps {
                 script {
                     echo 'Building Maven project...'
-                    // Navega até o diretório onde se encontra o pom.xml
+                    // Executa o Maven no diretório que contém o pom.xml
                     dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
                         try {
                             sh 'mvn clean package -DskipTests'
@@ -44,17 +44,17 @@ pipeline {
             steps {
                 script {
                     echo 'Starting SonarQube analysis...'
-                    try {
-                        // Executa a análise no diretório correto onde está o pom.xml
-                        dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
-                            withSonarQubeEnv('SonarQube') {
+                    // Executa a análise SonarQube no mesmo diretório do pom.xml
+                    dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
+                        withSonarQubeEnv('SonarQube') {
+                            try {
                                 sh "mvn sonar:sonar -Dsonar.projectKey=funcionap"
+                                echo 'SonarQube analysis completed successfully.'
+                            } catch (err) {
+                                echo "SonarQube analysis failed: ${err}"
+                                error "Pipeline aborted due to SonarQube analysis failure."
                             }
                         }
-                        echo 'SonarQube analysis completed successfully.'
-                    } catch (err) {
-                        echo "SonarQube analysis failed: ${err}"
-                        error "Pipeline aborted due to SonarQube analysis failure."
                     }
                 }
             }
@@ -63,12 +63,15 @@ pipeline {
             steps {
                 script {
                     echo 'Building Docker image...'
-                    try {
-                        sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
-                        echo 'Docker image built successfully.'
-                    } catch (err) {
-                        echo "Docker build error: ${err}"
-                        error "Docker image build failed - terminating pipeline."
+                    // Executa o docker build no diretório onde o Dockerfile está localizado
+                    dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
+                        try {
+                            sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
+                            echo 'Docker image built successfully.'
+                        } catch (err) {
+                            echo "Docker build error: ${err}"
+                            error "Docker image build failed - terminating pipeline."
+                        }
                     }
                 }
             }
@@ -77,14 +80,14 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning Docker image with Trivy...'
-                    // Executa o scan com Trivy e direciona o relatório para trivy-report.txt
+                    // Executa o Trivy, salvando o relatório em trivy-report.txt
                     def trivyCmd = "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock " +
                                    "-v /root/.cache/trivy:/root/.cache/trivy aquasec/trivy:latest image " +
                                    "--ignore-unfixed --severity CRITICAL ${DOCKER_IMAGE}:${DOCKER_TAG}"
                     def exitCode = sh(script: "${trivyCmd} | tee trivy-report.txt", returnStatus: true)
                     if (exitCode != 0) {
                         echo "Trivy scan completed with issues (exit code ${exitCode}). Check the report for details."
-                        // Marca o build como UNSTABLE, mas não interrompe o pipeline
+                        // Marca o build como UNSTABLE, mas não interrompe a pipeline
                         currentBuild.result = 'UNSTABLE'
                     } else {
                         echo 'Trivy scan completed successfully with no critical vulnerabilities.'

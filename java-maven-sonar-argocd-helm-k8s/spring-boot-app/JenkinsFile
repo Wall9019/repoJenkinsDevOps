@@ -1,12 +1,12 @@
 pipeline {
     agent any
     environment {
-        DOCKER_CREDENTIALS_ID    = 'docker'          // Credential ID for Docker Hub (username/password)
-        SONARQUBE_CREDENTIALS_ID = 'sonar'           // Credential ID for SonarQube (token or user/pass)
-        GIT_CREDENTIALS_ID       = 'git'             // Credential ID for Git SCM access
-        DOCKER_IMAGE = 'wall90/funcionap'            // Docker Hub image name
-        DOCKER_TAG   = 'latest'                      // Docker image tag
-        SONARQUBE_SERVER = 'http://<IP_DO_SONARQUBE>:9000'  // SonarQube server URL (from config)
+        DOCKER_CREDENTIALS_ID    = 'docker'          // Credencial do Docker Hub (username/password)
+        SONARQUBE_CREDENTIALS_ID = 'sonar'           // Credencial do SonarQube (token ou user/pass)
+        GIT_CREDENTIALS_ID       = 'git'             // Credencial para acesso ao Git
+        DOCKER_IMAGE = 'wall90/funcionap'            // Nome da imagem Docker
+        DOCKER_TAG   = 'latest'                      // Tag da imagem
+        SONARQUBE_SERVER = 'http://<IP_DO_SONARQUBE>:9000'  // URL do SonarQube
     }
     stages {
         stage('Checkout') {
@@ -14,7 +14,7 @@ pipeline {
                 script {
                     echo 'Checking out source code...'
                     try {
-                        git branch: 'main', credentialsId: env.GIT_CREDENTIALS_ID, url: 'https://github.com/Wall9019/repoJenkinsDevOps.git'
+                        git branch: 'main', credentialsId: GIT_CREDENTIALS_ID, url: 'https://github.com/Wall9019/repoJenkinsDevOps.git'
                         echo 'Checkout completed successfully.'
                     } catch (err) {
                         echo "Error during Git checkout: ${err}"
@@ -27,12 +27,15 @@ pipeline {
             steps {
                 script {
                     echo 'Building Maven project...'
-                    try {
-                        sh 'mvn clean package -DskipTests'
-                        echo 'Maven build completed successfully.'
-                    } catch (err) {
-                        echo "Maven build error: ${err}"
-                        error "Build failed - terminating pipeline."
+                    // Navega até o diretório onde se encontra o pom.xml
+                    dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
+                        try {
+                            sh 'mvn clean package -DskipTests'
+                            echo 'Maven build completed successfully.'
+                        } catch (err) {
+                            echo "Maven build error: ${err}"
+                            error "Build failed - terminating pipeline."
+                        }
                     }
                 }
             }
@@ -42,9 +45,10 @@ pipeline {
                 script {
                     echo 'Starting SonarQube analysis...'
                     try {
-                        // Prepare SonarQube env (requires SonarQube server config in Jenkins)
+                        // Usa as configurações do SonarQube definidas no Jenkins (configurar o SonarQube Server na seção de configuração do Jenkins)
                         withSonarQubeEnv('SonarQube') {
-                            sh 'mvn sonar:sonar -Dsonar.projectKey=funcionap'
+                            // Executa a análise com o Maven; o projectKey deve ser ajustado conforme o seu projeto
+                            sh "mvn sonar:sonar -Dsonar.projectKey=funcionap"
                         }
                         echo 'SonarQube analysis completed successfully.'
                     } catch (err) {
@@ -59,7 +63,7 @@ pipeline {
                 script {
                     echo 'Building Docker image...'
                     try {
-                        sh "docker build -t ${env.DOCKER_IMAGE}:${env.DOCKER_TAG} ."
+                        sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
                         echo 'Docker image built successfully.'
                     } catch (err) {
                         echo "Docker build error: ${err}"
@@ -72,24 +76,22 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning Docker image with Trivy...'
-                    // Run Trivy scan (non-blocking the pipeline) and save report
+                    // Executa o scan com Trivy e direciona o relatório para trivy-report.txt
                     def trivyCmd = "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock " +
                                    "-v /root/.cache/trivy:/root/.cache/trivy aquasec/trivy:latest image " +
-                                   "--ignore-unfixed --severity CRITICAL ${env.DOCKER_IMAGE}:${env.DOCKER_TAG}"
+                                   "--ignore-unfixed --severity CRITICAL ${DOCKER_IMAGE}:${DOCKER_TAG}"
                     def exitCode = sh(script: "${trivyCmd} | tee trivy-report.txt", returnStatus: true)
                     if (exitCode != 0) {
                         echo "Trivy scan completed with issues (exit code ${exitCode}). Check the report for details."
-                        // Mark build as unstable if the scan encountered issues (but do not fail the pipeline)
+                        // Marca o build como UNSTABLE, mas não interrompe o pipeline
                         currentBuild.result = 'UNSTABLE'
                     } else {
                         echo 'Trivy scan completed successfully with no critical vulnerabilities.'
                     }
-                    echo 'Trivy scan stage finished.'
                 }
             }
             post {
                 always {
-                    // Archive the Trivy report for later review
                     archiveArtifacts artifacts: 'trivy-report.txt', allowEmptyArchive: true
                 }
             }
@@ -98,9 +100,9 @@ pipeline {
             steps {
                 script {
                     echo 'Pushing Docker image to Docker Hub...'
-                    // Authenticate to Docker Hub
-                    withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDENTIALS_ID, 
-                                                      usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, 
+                                                          usernameVariable: 'DOCKER_USERNAME', 
+                                                          passwordVariable: 'DOCKER_PASSWORD')]) {
                         try {
                             sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
                         } catch (err) {
@@ -108,15 +110,13 @@ pipeline {
                             error "Docker login failed - terminating pipeline."
                         }
                     }
-                    // Push the image
                     try {
-                        sh "docker push ${env.DOCKER_IMAGE}:${env.DOCKER_TAG}"
+                        sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
                         echo 'Docker image pushed successfully.'
                     } catch (err) {
                         echo "Docker push failed: ${err}"
                         error "Docker push failed - terminating pipeline."
                     } finally {
-                        // Always log out from Docker Hub
                         sh 'docker logout'
                     }
                 }
@@ -126,7 +126,7 @@ pipeline {
     post {
         always {
             echo 'Cleaning up local Docker image...'
-            sh "docker rmi ${env.DOCKER_IMAGE}:${env.DOCKER_TAG} || true"
+            sh "docker rmi ${DOCKER_IMAGE}:${DOCKER_TAG} || true"
             echo 'Pipeline execution complete.'
         }
     }
